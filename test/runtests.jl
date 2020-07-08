@@ -36,10 +36,11 @@ using Test
         @test mm(1.0) ≈ 0.5
         @test mm(3.0, 3.0) ≈ 0.5
         @test mm(10000.0, 1.0) > 0.99
-        @test all(map((x, k)->mmr(x, k) + mm(x, k) ≈ 1.0, 0.0:0.1:10.0, 0.1:0.1:10.0))
-        @test all(map((x, k, n)->hill(x, k, n) + hillr(x, k, n) ≈ 1.0, 0.0:0.1:10.0, 0.1:0.1:10.0, 0.2:0.1:5.0))
-        @test all(map(x-> expit(x) ≈ inv( p_one( exp(-x) ) ), -10.0:0.1:10.0))
-        @test exprel(0.0) .≈ 1.0
-        
+        @test all(Base.Iterators.product(0.0:0.1:10.0, 0.1:0.1:10.0)) do (x ,k)
+            mmr(x, k) + mm(x, k) ≈ 1.0
+        end
+        @test all(Base.Iterators.product(0.0:0.1:10.0, 0.1:0.1:10.0, 0.1:0.1:10.0)) do (x ,k, n)
+            hill(x, k, n) + hillr(x, k, n) ≈ 1.0
+        end
     end
 end
