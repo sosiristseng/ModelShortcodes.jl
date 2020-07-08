@@ -1,0 +1,13 @@
+name = "ModelShortcodes"
+uuid = "1b812b80-aa2a-4b8d-8409-4811a979d73e"
+authors = ["Wen Wei Tseng <sosiristseng@gmail.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1.4"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
