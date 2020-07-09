@@ -1,7 +1,8 @@
 module ModelShortcodes
 
-using Parameters
-using Waveforms: squarewave1
+using UnPack
+
+export T0, F, R, VT, iVT, KEQ_MGATP, valence, ph_to_mm, mm_to_ph, Chemical, p_one, one_m, mm, mmr, hill, hillr, expit, nernst, pmf, ghk, sqrt_s, pow_s, exprel, i_stim, hill_s, hillr_s, binding, poly
 
 # TODO: Unitful.jl?
 module Units
@@ -40,8 +41,6 @@ const C = A * s          # Columb
 end # module
 
 using .Units: C, mol, J, kJ, M, mM, μM
-
-export T0, F, R, VT, iVT, KEQ_MGATP, valence, ph_to_mm, mm_to_ph, Chemical
 
 # Physical constants
 const T0 = 310             # Default temp (37C)
@@ -94,9 +93,7 @@ valence(::Type{HPO4}) = valence(Phosphate) + valence(Proton)
 valence(::Type{H2PO4}) = valence(HPO4) + valence(Proton)
 valence(::Type{Water}) = valence(Hydroxide) + valence(Proton)
 
-
 # Commonly-used functions
-export p_one, one_m, mm, mmr, hill, hillr, expit, nernst, pmf, ghk, sqrt_s, pow_s, exprel, i_stim, hill_s, hillr_s, binding, poly, binding_fraction
 
 "x+1 with the same type as x"
 p_one(x) = one(x) + x
@@ -132,27 +129,27 @@ sqrt_s(x) = _sign(sqrt, x)
 pow_s(x, n) = _sign(x -> x^n, x)
 
 "Signed Hill function"
-hill_s(x, k, n) = mm(pow_s(x / k, n))
+hill_s(x, k, n) = _sign(x -> hill(x, k, n), x)
 
 "Signed repressive Hill function"
-hillr_s(x, k, n) = mmr(pow_s(x / k, n))
+hillr_s(x, k, n) = _sign(x -> hill_s(x, k, n), x)
 
-"Periodice stimulus current with `strength` for a `duty` for every `peroid`"
-i_stim(t; period=one(t), duty=zero(t), strength=zero(t)) = 0.5 * strength * p_one(squarewave1(t/period, duty/period))
+"Periodic stimulus current with `strength` for a `duty` for every `peroid`"
+i_stim(t; period=one(t), duty=zero(t), strength=zero(t)) = ifelse(mod(t, period) < duty, strength, zero(strength))
 
 """
     nernst(x_o, x_i [, z=1]; v0=VT)
     nernst(x_o, x_i [, X]; v0=VT)
 
-Get the Nernst potential across two compartments of species `X` with charge (valence) of `z`, where `x_o` is the concentration in the outer compartment, while `x_i` is the inner one. 
+Get the Nernst potential across two compartments of species `X` with charge (valence) of `z`, where `x_o` is the concentration in the outer compartment, while `x_i` is the inner one.
 OPtional parameter `v0` indicates the thermal voltage, defaults to 26.71 mV, corresponding the temprature of 310K.
 """
 nernst(x_o, x_i; v0=VT) = v0 * log(x_o / x_i)
 nernst(x_o, x_i, z::Int; v0=VT) = nernst(x_o, x_i; v0 = VT) / z
-nernst(x_o, x_i, X::Chemical; v0=VT) = nernst(x_o, x_i, valence(X); v0=VT)
+nernst(x_o, x_i, X::Type{T}; v0=VT) where {T<:Chemical} = nernst(x_o, x_i, valence(X); v0=VT)
 
 """
-    pmf(ΔΨ, h_i, h_m; v0 = VT) 
+    pmf(ΔΨ, h_i, h_m; v0 = VT)
     pmf(ΔΨ, ΔpH, ; v0 = VT)
 
 The proton motive force (pmf) from the mitochodnrial membrane potential (`ΔΨ`) and both concentrations of proton in the intermembrane space (`h_i`) and the mitochondrial matrix (`h_m`).
@@ -164,7 +161,7 @@ pmf(ΔΨ, ΔpH; v0 = VT) = ΔΨ - log(10) * v0 * ΔpH
 """
     ghk(p, z, x_i, x_o, zvfrt, em1)
     ghk(p, z, vm, x_i, x_o ; v0 = VT)
-    ghk(p, X::Chemical, vm, x_i, x_o; v0 = VT) 
+    ghk(p, X::Chemical, vm, x_i, x_o; v0 = VT)
 
 GHK flux equation
 * `p`: the permeability of the membrane for ion `X`
@@ -184,43 +181,7 @@ function ghk(p, z, vm, x_i, x_o; v0 = VT)
     return ghk(p, z, x_i, x_o, zvfrt, em1)
 end
 
-ghk(p, X::Chemical, vm, x_i, x_o; v0 = VT) = ghk(p, valence(X), vm, x_i, x_o; v0 = VT)
-
-# Monod-Wyman-Changeux (MWC) model
-## https://en.wikipedia.org/wiki/Monod-Wyman-Changeux_model
-"numerator / denom terms in the MWC model"
-function _mwc(s, k, n)
-    A = s / k
-    den = p_one(A)^n
-    num = mm(A) * den
-    return (n=num, d=den)
-end
-
-"Relaxed and taut terms in the MWC scheme"
-function _mwc_terms(s, Kr, Kt, n, m, L)
-    r_n, r_d = _mwc(s, Kr, n)
-    t_n, t_d = _mwc(s, Kt, m)
-    den = r_d + L * t_d
-    return (r = r_n, t = t_n, d = den)
-end
-
-"""
-    mwc_rate(s, Kr, Kt, n, m, L, Vr [, Vt])
-    
-MWC reaction rate
-"""
-function mwc_rate(s, Kr, Kt, n, m, L, Vr)
-    @unpack r, d = _mwc_terms(s, Kr, Kt, n, m, L)
-    return Vr * r / d
-end
-
-function mwc_rate(s, Kr, Kt, n, m, L, Vr, Vt)
-    @unpack r, t, d  = _mwc_terms(s, Kr, Kt, n, m, L)
-    return (Vr * r + Vt * t) / d
-end
-
-"MWC binding occupancy"
-mwc_binding(s, Kr, Kt, n, m, L) = mwc_rate(s, Kr, Kt, n, m, L, one(s), one(s))
+ghk(p, X::Type{T}, vm, x_i, x_o; v0 = VT) where {T<:Chemical} = ghk(p, valence(X), vm, x_i, x_o; v0 = VT)
 
 """
     qss_bibi(k1p, k1m, k2p, k2m, k3p, k3m)
