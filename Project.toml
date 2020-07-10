@@ -1,7 +1,7 @@
 name = "ModelShortcodes"
 uuid = "1b812b80-aa2a-4b8d-8409-4811a979d73e"
 authors = ["Wen Wei Tseng <sosiristseng@gmail.com>"]
-version = "0.1.1"
+version = "0.2.0"
 
 [deps]
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
