@@ -2,7 +2,8 @@ module ModelShortcodes
 
 using UnPack
 
-export T0, F, R, VT, iVT, KEQ_MGATP, valence, ph_to_mm, mm_to_ph, Chemical, p_one, one_m, mm, mmr, hill, hillr, expit, nernst, pmf, ghk, sqrt_s, pow_s, exprel, i_stim, hill_s, hillr_s, binding, poly
+export T0, F, R, VT, iVT, KEQ_MGATP, valence, power_to_conc, conc_to_power, Chemical, p_one, one_m, mm, mmr, hill, hillr, expit, nernst, pmf, ghk, sqrt_s, pow_s, exprel, i_stim, hill_s, hillr_s, binding, poly, binding_fraction,
+fractions
 
 # TODO: Unitful.jl?
 module Units
@@ -53,34 +54,38 @@ const KEQ_MGATP = exp(-ΔG_MGATP / (R * T0))   # equlibrium constant of MgATP hy
 
 # Chemical Tags
 abstract type Chemical end
-struct Calcium <: Chemical end
-struct Sodium <: Chemical end
-struct Potassium <: Chemical end
-struct Proton <: Chemical end
-struct Superoxide <: Chemical end
-struct Magnesium <: Chemical end
-struct ATP <: Chemical end
-struct ADP <: Chemical end
-struct AMP <: Chemical end
-struct HATP <: Chemical end
-struct HADP<: Chemical  end
-struct MgATP <: Chemical end
-struct MgADP <: Chemical end
-struct Hydroxide <: Chemical end
+abstract type Cation <: Chemical end
+abstract type Anion <: Chemical end
+abstract type Phosphate <: Anion end
+abstract type Adenylate <: Anion end
+abstract type CationV1 <: Cation end
+abstract type CationV2 <: Cation end
+
 struct Water <: Chemical end
-struct Phosphate <: Chemical end
-struct HPO4 <: Chemical end
-struct H2PO4 <: Chemical end
+struct HydrogenPeroxide <: Chemical end
+struct Superoxide <: Anion end
+struct Hydroxide <: Anion end
+struct Sodium <: CationV1 end
+struct Potassium <: CationV1 end
+struct Proton <: CationV1 end
+struct Calcium <: CationV2 end
+struct Magnesium <: CationV2 end
+struct ATP <: Adenylate end
+struct ADP <: Adenylate end
+struct AMP <: Adenylate end
+struct HATP <: Adenylate end
+struct HADP<: Adenylate  end
+struct MgATP <: Adenylate end
+struct MgADP <: Adenylate end
+struct HPO4 <: Phosphate end
+struct H2PO4 <: Phosphate end
 
 "Ion valence"
-valence(::Type{Chemical}) = 0
-valence(::Type{Sodium}) = +1
-valence(::Type{Potassium}) = +1
-valence(::Type{Proton}) = +1
-valence(::Type{Calcium}) = +2
+valence(::Type{T}) where {T<:Chemical} = 0
+valence(::Type{T}) where {T<:CationV1} = +1
+valence(::Type{T}) where {T<:CationV2} = +2
 valence(::Type{Superoxide}) = -1
 valence(::Type{Hydroxide}) = -1
-valence(::Type{Magnesium}) = +2
 valence(::Type{ATP}) = -4
 valence(::Type{ADP}) = -3
 valence(::Type{AMP}) = -2
@@ -90,8 +95,10 @@ valence(::Type{HADP}) = valence(ADP) + valence(Proton)
 valence(::Type{MgATP}) = valence(ATP) + valence(Magnesium)
 valence(::Type{MgADP}) = valence(ADP) + valence(Magnesium)
 valence(::Type{HPO4}) = valence(Phosphate) + valence(Proton)
-valence(::Type{H2PO4}) = valence(HPO4) + valence(Proton)
+valence(::Type{H2PO4}) = valence(Phosphate) + 2 * valence(Proton)
 valence(::Type{Water}) = valence(Hydroxide) + valence(Proton)
+
+
 
 # Commonly-used functions
 
@@ -183,36 +190,17 @@ end
 
 ghk(p, X::Type{T}, vm, x_i, x_o; v0 = VT) where {T<:Chemical} = ghk(p, valence(X), vm, x_i, x_o; v0 = VT)
 
-"""
-    qss_bibi(k1p, k1m, k2p, k2m, k3p, k3m)
-
-Returns equivalent forward and backward rate constants from 3 pairs of reactions constants
-simplifies A + B = AB = PQ = P + Q
-to A + B = P + Q
-"""
-function qss_bibi(k1p, k1m, k2p, k2m, k3p, k3m)
-    Δ = inv(k1m * k2m + k2p * k3p + k1m * k3p)
-    kf = k1p * k2p * k3p * Δ
-    kb = k1m * k2m * k3m * Δ
-    return (kf = kf, kb = kb)
-end
-
 # Conversion between pH and concenrtration
-"Convert from pH to concentration (mM)"
-ph_to_mm(x) = exp10(-x + 3)
-"Convert from concentration (mM) to pH"
-mm_to_ph(x) = -log10(x) + 3
+"Convert from power (e.g. pH) to concentration (in mM)"
+power_to_conc(p) = exp10(-p + 3)
+"Convert from concentration (in mM) to power"
+conc_to_power(c) = -log10(c) + 3
 
-# Binding fractions
-
-const KWater = 1E-14M^2
-const Cations = Union{Proton, Magnesium, Sodium, Potassium}
-
-## Defaults to those of Guynn, 1973 (pH 7.4, 38C, Mg = 1mM, ionic strength = 0.2 M)
+# Constants from Guynn 1973 (pH 7.4, 38C, Mg = 1mM, ionic strength = 0.2 M)
 binding(X::Type{T}, Y::Type{S}) where {T<:Chemical, S<:Chemical} = Inf  # defaults to infinity
-binding(X::Type{T}, Y::Type{T}) where {T<:Chemical} = Inf               # Self-to-self defaults to infinity
-binding(X::Type{T}, Y::Type{Cations}) where {T<:Chemical} = binding(Y, X) # Cations could be before or after anions
-binding(X::Type{Proton}, Y::Type{Hydroxide}) = KWater
+binding(X::Type{T}, Y::Type{S}) where {T<:Chemical, S<:Cation} = binding(Y, X) # Cations could be before or after anions
+binding(X::Type{T}, Y::Type{T}) where {T<:Cation} = Inf                # cation to cation: Inf
+binding(X::Type{Proton}, Y::Type{Hydroxide}) = 1E-14M^2
 binding(X::Type{Proton}, Y::Type{HPO4}) = 1.76E-7M
 binding(X::Type{Proton}, Y::Type{ATP}) = 1.08E-7M
 binding(X::Type{Proton}, Y::Type{ADP}) = 1.20E-7M
@@ -230,23 +218,20 @@ binding_fraction(x, X::Type{T}, Y::Type{S}) where {T<:Chemical, S<:Chemical} = x
 "Binding polynomial, sum of binding fractions"
 poly(x, X::Type{T}, Y::Type{S}) where {T<:Chemical, S<:Chemical} = p_one(binding_fraction(x, X, Y))
 
-"Adenine nucleotide to its binding components"
-function fractions(Σaxp, h, mg, A::Type{Union{ATP, ADP}})
+"Adenine nucleotide subcomponents fractions"
+function fractions(h, mg, A::Type{T}) where T <: Adenylate
     fH = binding_fraction(h, Proton, A)
     fMg = binding_fraction(mg, Magnesium, A)
-    poly = p_one(fH + fMg)
-    axpn = Σaxp / poly
-    haxp = fH * axpn
-    mgaxp = fMg * axpn
-    return (axpn = axpn, haxp = haxp, mgaxp = mgaxp, p = poly)
+    p = p_one(fH + fMg)
+    axpn = inv(p)
+    return (axpn = axpn, haxp = fH * axpn, mgaxp = fMg * axpn, p = p)
 end
 
 "Phosphate to its binding components"
-function fractions(Σpi, h)
+function fractions(h, ::Type{T}) where {T <: Phosphate}
     p = poly(h, Proton, HPO4)
-    hpo4 = Σpi / poly
-    h2po4 = Σpi - hpo4
-    return (hpo4 = hpo4, h2po4 = h2po4, p = p)
+    hpo4 = inv(p)
+    return (hpo4 = hpo4, h2po4 = omx(hpo4), p = p)
 end
 
 end
