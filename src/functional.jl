@@ -41,7 +41,7 @@ expit(x) = mmr(exp(-x))
 Returns x / (exp(x)-1) accurate when x is near zero.
 See scipy example https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.exprel.html
 
-Note the fraction is the opposite of `scipy.exprel()`
+Note the fraction is the reciprocal of `scipy.exprel()`
 """
 function exprel(x, em1 = expm1(x))
     res = x / em1
@@ -68,8 +68,8 @@ Signed repressive Hill function
 """
 hillr_s(x, k, n) = hill_s(k, x, n)
 
-"Periodic stimulus current with `strength` for a `duty` for every `peroid`"
-i_stim(t; period=one(t), duty=zero(t), strength=zero(t)) = ifelse(mod(t, period) < duty, strength, zero(strength))
+"Periodic square stimulus with `strength` for a `duty` for every `peroid`"
+stimulate(t; period=one(t), duty=zero(t), strength=zero(t)) = ifelse(mod(t, period) < duty, strength, zero(strength))
 
 """
     nernst(x_o, x_i[, z=1]; v0=VT)
@@ -80,7 +80,7 @@ The Nernst potential ``E_N`` : [Wikipedia](https://en.wikipedia.org/wiki/Nernst_
 - `x_i` : the concentration in the inner compartment
 - `v0` : thermal voltage, defaults to 26.71 mV (@310K).
 """
-nernst(x_o, x_i; v0=VT) = v0 * log(x_o / x_i)
+nernst(x_o, x_i; v0 = VT) = v0 * log(x_o / x_i)
 nernst(x_o, x_i, z::Int; v0=VT) = nernst(x_o, x_i; v0 = VT) / z
 const eN = nernst
 
@@ -88,7 +88,7 @@ const eN = nernst
     pmf(ΔΨ, h_i, h_m; v0 = VT)
     pmf(ΔΨ, ΔpH, ; v0 = VT)
 
-The proton motive force (pmf, ``Δp``) from the mitochondrial membrane potential (`ΔΨ`) and both concentrations of proton in the intermembrane space (`h_i`) and the mitochondrial matrix (`h_m`).
+The proton motive force (pmf, ``Δp``) from the mitochondrial membrane potential (`ΔΨ`) and both concentrations of proton in the intermembrane space (`h_i`) and the mitochondrial matrix ( `h_m` ).
 Or from `ΔΨ` and pH difference across (`ΔpH`) the inner mitochodnrial membrane (IMM)
 """
 pmf(ΔΨ, h_i, h_m; v0 = VT) = ΔΨ + nernst(h_i, h_m; v0 = VT)
@@ -98,7 +98,7 @@ const Δp = pmf
 """
     nernst_i(v [, z=1]; iv0=iVT)
 
-The inverse result of Nernst function. Also the reciprocal Boltzmann factor by a voltage difference `v` across a membrane.
+The inverse result of Nernst function. Equivalent to the reciprocal of Boltzmann factor by a voltage difference `v` across a membrane.
 """
 nernst_i(v; iv0=iVT) = exp(v * iv0)
 nernst_i(v, z::Int; iv0=iVT) = nernst_i(z * v; iv0=iVT)
@@ -130,5 +130,30 @@ end
 # Conversion between pH and concenrtration
 "Convert from power (e.g. pH) to concentration (in mM)"
 power_to_conc(p) = exp10(-p + 3)
+
 "Convert from concentration (in mM) to power"
 conc_to_power(c) = -log10(c) + 3
+
+"Binding strength of ligand(s) on the receptor independently."
+binding(x1, aff1) = (x1 * aff1, one(x1))
+binding(x1, aff1, x2, aff2) = (x1 * aff1, x2 * aff2, one(x1))
+binding(x1, aff1, x2, aff2, x3, aff3) = (x1 * aff1, x2 * aff2, x3 * aff3, one(x1))
+
+"Binding polynomial between ligand `x` and receptor with affinity (`aff`)"
+poly(x1, aff1) = sum(binding(x1, aff1))
+poly(x1, aff1, x2, aff2) = sum(binding(x1, aff1, x2, aff2))
+poly(x1, aff1, x2, aff2, x3, aff3) = sum(binding(x1, aff1, x2, aff2, x3, aff3))
+
+function breakdown_axp(h, aH, mg, aMG, Σa)
+    fractions = fH, fMg, free = binding(h, aH, mg, aMG)
+    p = sum(fractions)
+    axpn = Σa / p
+    return (axpn = axpn, haxp = fH * axpn, mgaxp = fMg * axpn, p = p)
+end
+
+function breakdown_pi(h, aH, Σp)
+    fractions = fH, free = binding(h, aH)
+    p = sum(fractions)
+    hpo4 = Σa / p
+    return (hpo4 = hpo4, h2po4 = Σp - hpo4, p = p)
+end

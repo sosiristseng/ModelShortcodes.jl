@@ -1,5 +1,5 @@
 # Physical constants
-using .Units: C, mol, J, kJ, M, mM, μM
+import .Units: C, mol, J, kJ, M, mM, μM
 const T0 = 310             # Default temp (37C)
 const F = 96485C/mol       # Faraday constant
 const R = 8.314J/mol       # Ideal gas constant

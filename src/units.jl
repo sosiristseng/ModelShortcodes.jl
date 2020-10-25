@@ -1,4 +1,4 @@
-# TODO : Unitful.jl?
+# TODO : change to Unitful.jl?
 module Units
 
 const s = 1              # seconds
