@@ -1,7 +1,7 @@
 name = "ModelShortcodes"
 uuid = "1b812b80-aa2a-4b8d-8409-4811a979d73e"
 authors = ["Wen Wei Tseng <sosiristseng@gmail.com>"]
-version = "0.3.0"
+version = "0.4.0"
 
 [compat]
 julia = "^1.5"
