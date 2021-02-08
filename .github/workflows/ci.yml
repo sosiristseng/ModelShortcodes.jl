@@ -15,7 +15,7 @@ jobs:
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
-      - uses: actions/cache@v2
+      - uses: actions/cache@v2.1.4
         env:
           cache-name: cache-artifacts
         with:
